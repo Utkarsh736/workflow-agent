@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Environment
+.env
+
+# Digest output
+digest/*.md
+!digest/.gitkeep
+
+# uv
+uv.lock
+
+# IDE
+.vscode/
+.idea/
