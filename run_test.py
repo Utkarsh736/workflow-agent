@@ -1,42 +1,45 @@
 """
-First runnable step.
+First runnable step: search arXiv and use memory.
 
-This script calls search_arxiv and prints the results.
-No LLM. No memory. No agent loop.
+This script:
+1. Loads config (file + CLI override).
+2. Searches arXiv for each topic.
+3. Filters out papers already seen.
+4. Marks new papers as seen.
+5. Prints results.
 """
 
-import argparse
+from agent.config import load_config, parse_args
 from agent.tools import search_arxiv
+from agent.memory import check_seen, mark_seen, count_seen
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test arXiv search.")
-    parser.add_argument(
-        "--topic",
-        type=str,
-        default="agents",
-        help="Topic to search for. Default: agents",
-    )
-    parser.add_argument(
-        "--max",
-        type=int,
-        default=3,
-        help="Max results. Default: 3",
-    )
-    args = parser.parse_args()
+    args = parse_args()
+    config = load_config(args)
 
-    print(f"Searching arXiv for: {args.topic}")
-    print(f"Max results: {args.max}")
+    print(f"Topics: {config['topics']}")
+    print(f"Max per topic: {config['max_results_per_topic']}")
+    print(f"DB: {config['db_path']}")
     print("-" * 60)
 
-    papers = search_arxiv(args.topic, max_results=args.max)
+    new_papers = []
 
-    for i, p in enumerate(papers, 1):
-        print(f"\n[{i}] {p['title']}")
-        print(f"    ID: {p['id']}")
-        print(f"    Published: {p['published']}")
-        print(f"    URL: {p['url']}")
-        print(f"    Abstract: {p['abstract'][:200]}...")
+    for topic in config["topics"]:
+        print(f"\n[search] topic: {topic}")
+        papers = search_arxiv(topic, max_results=config["max_results_per_topic"])
+
+        for paper in papers:
+            if check_seen(paper["id"], db_path=config["db_path"]):
+                print(f"  [skip] already seen: {paper['id']}")
+                continue
+            mark_seen(paper["id"], paper["title"], db_path=config["db_path"])
+            new_papers.append(paper)
+            print(f"  [new]  {paper['title']}")
+
+    print("-" * 60)
+    print(f"New papers: {len(new_papers)}")
+    print(f"Total in memory: {count_seen(config['db_path'])}")
 
 
 if __name__ == "__main__":

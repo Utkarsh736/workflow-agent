@@ -1,0 +1,14 @@
+# Default topics to search.
+topics:
+  - agents
+  - evals
+  - transformer
+
+# Max papers per topic.
+max_results_per_topic: 5
+
+# Output directory for digests.
+digest_dir: digest
+
+# SQLite database path.
+db_path: data/memory.db
