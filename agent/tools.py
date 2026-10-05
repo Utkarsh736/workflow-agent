@@ -103,3 +103,42 @@ def search_arxiv(topic: str, max_results: int = 5) -> list[dict[str, Any]]:
         return results
 
     return _retry_with_backoff(_do_search)
+
+
+# --- Tool 2: summarize_paper ---
+
+from agent.llm import chat
+from agent.prompts import SUMMARIZE_SYSTEM, summarize_user
+
+
+def summarize_paper(
+    title: str,
+    abstract: str,
+    model: str = "qwen/qwen3.8-27b",
+    max_tokens: int = 300,
+    temperature: float = 0.2,
+    reasoning_effort: str | None = "none",
+) -> dict[str, Any]:
+    """
+    Summarize one paper with the Groq LLM.
+
+    Returns a dict with:
+    - summary: the bullet text
+    - input_tokens, output_tokens, total_tokens
+    - model
+    """
+    result = chat(
+        system=SUMMARIZE_SYSTEM,
+        user=summarize_user(title, abstract),
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
+    )
+    return {
+        "summary": result.text,
+        "input_tokens": result.input_tokens,
+        "output_tokens": result.output_tokens,
+        "total_tokens": result.total_tokens,
+        "model": result.model,
+    }

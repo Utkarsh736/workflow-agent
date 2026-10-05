@@ -12,3 +12,13 @@ digest_dir: digest
 
 # SQLite database path.
 db_path: data/memory.db
+
+# Groq model. Check console.groq.com/docs/models for current names..
+# Qwen 3.8 27B is the fastest non-reasoning model on Groq's free tier.
+llm_model: qwen/qwen3.8-27b
+
+# Max tokens for each summary.
+llm_max_tokens: 300
+
+# Temperature. Low = more focused.
+llm_temperature: 0.2
