@@ -13,9 +13,9 @@ build/
 digest/*.md
 !digest/.gitkeep
 
-# uv
-uv.lock
-
 # IDE
 .vscode/
 .idea/
+
+# Local data
+data/*.db
