@@ -1,5 +1,8 @@
 """
-Step 3: search arXiv, use memory, summarize with Groq.
+Direct tool test. No agent loop.
+
+Use this to test tools in isolation.
+For the real agent, use run_agent.py.
 """
 
 from dotenv import load_dotenv
