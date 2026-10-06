@@ -19,3 +19,9 @@ digest/*.md
 
 # Local data
 data/*.db
+
+# Demo recordings that are large or regenerable
+demo/*.gif
+
+# Local scratch
+demo/*.local.*

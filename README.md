@@ -19,6 +19,16 @@ The agent:
 You talk to the agent in plain English.
 The agent decides which tools to call.
 
+## Demo
+
+[![asciicast](https://asciinema.org/a/Hke4TiZZjjfZgxHv.svg)](https://asciinema.org/a/Hke4TiZZjjfZgxHv)
+
+Record it yourself:
+
+\`\`\`bash
+asciinema rec demo/workflow-agent-demo.cast -c "bash demo/run-demo.sh"
+\`\`\`
+
 ## Quick start
 
 ```bash
