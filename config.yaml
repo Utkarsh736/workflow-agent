@@ -22,3 +22,6 @@ llm_max_tokens: 300
 
 # Temperature. Low = more focused.
 llm_temperature: 0.2
+
+# Max tokens per agent turn (not per summary).
+agent_max_tokens: 1024

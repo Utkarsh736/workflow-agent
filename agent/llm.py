@@ -8,6 +8,7 @@ Logs token usage.
 
 import os
 import time
+import json
 from dataclasses import dataclass
 
 from groq import Groq
@@ -107,3 +108,105 @@ def chat(
     raise RuntimeError(
         f"Groq call failed after {max_retries + 1} attempts."
     ) from last_error
+
+
+# --- Tool-calling chat ---
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class AssistantTurn:
+    """
+    One assistant turn from the model.
+
+    message: the message dict to append to the conversation.
+    text: the assistant's text content (may be empty).
+    tool_calls: list of {id, name, arguments}.
+    """
+    message: dict
+    text: str
+    tool_calls: list[dict]
+
+
+def chat_with_tools(
+    messages: list[dict],
+    tools: list[dict],
+    model: str = "qwen/qwen3.8-27b",
+    temperature: float = 0.2,
+    max_tokens: int = 1024,
+    max_retries: int = 3,
+) -> AssistantTurn:
+    """
+    Call Groq with a list of tools.
+
+    Returns an AssistantTurn. The message dict can be appended
+    to the conversation. It contains the assistant message and
+    any tool_calls, in the format Groq expects.
+    """
+    client = _get_client()
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            break
+        except APIStatusError as e:
+            if e.status_code not in (429, 503):
+                raise
+            last_error = e
+            if attempt == max_retries:
+                raise
+            wait = RETRY_BACKOFF_SECONDS[attempt]
+            print(f"[groq] HTTP {e.status_code}. Waiting {wait}s.")
+            time.sleep(wait)
+        except APIConnectionError as e:
+            last_error = e
+            if attempt == max_retries:
+                raise
+            wait = RETRY_BACKOFF_SECONDS[attempt]
+            print(f"[groq] Connection error. Waiting {wait}s.")
+            time.sleep(wait)
+
+    msg = response.choices[0].message
+
+    tool_calls: list[dict] = []
+    raw_tool_calls = getattr(msg, "tool_calls", None) or []
+    for tc in raw_tool_calls:
+        tool_calls.append({
+            "id": tc.id,
+            "name": tc.function.name,
+            "arguments": json.loads(tc.function.arguments or "{}"),
+        })
+
+    # Build the assistant message for the conversation history.
+    assistant_message: dict = {
+        "role": "assistant",
+        "content": msg.content,
+    }
+    if raw_tool_calls:
+        assistant_message["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in raw_tool_calls
+        ]
+
+    return AssistantTurn(
+        message=assistant_message,
+        text=(msg.content or "").strip(),
+        tool_calls=tool_calls,
+    )
