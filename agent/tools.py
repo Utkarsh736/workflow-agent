@@ -142,3 +142,106 @@ def summarize_paper(
         "total_tokens": result.total_tokens,
         "model": result.model,
     }
+
+
+# --- Agent-facing tools ---
+
+from datetime import date
+from pathlib import Path
+
+from agent.sessions import add_papers, get_papers, reset_run
+from agent.config import load_config
+from agent.memory import check_seen, mark_seen
+
+
+_CONFIG_CACHE: dict | None = None
+
+
+def _config() -> dict:
+    """Load config once and cache it."""
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is None:
+        _CONFIG_CACHE = load_config()
+    return _CONFIG_CACHE
+
+
+def get_new_papers(topic: str, max_results: int = 5) -> dict[str, Any]:
+    """
+    Agent-facing tool.
+
+    Search arXiv for a topic. Filter seen papers.
+    Summarize each new paper. Append to the current run.
+    Return a small summary (count and titles).
+    """
+    cfg = _config()
+    db_path = cfg["db_path"]
+
+    papers = search_arxiv(topic, max_results=max_results)
+
+    new_papers: list[dict] = []
+    for paper in papers:
+        if check_seen(paper["id"], db_path=db_path):
+            continue
+
+        result = summarize_paper(
+            title=paper["title"],
+            abstract=paper["abstract"],
+            model=cfg["llm_model"],
+            max_tokens=cfg["llm_max_tokens"],
+            temperature=cfg["llm_temperature"],
+        )
+        paper["summary"] = result["summary"]
+        paper["tokens"] = result["total_tokens"]
+
+        mark_seen(paper["id"], paper["title"], db_path=db_path)
+        new_papers.append(paper)
+
+    total = add_papers(new_papers)
+
+    return {
+        "topic": topic,
+        "new_in_this_call": len(new_papers),
+        "run_total": total,
+        "titles": [p["title"] for p in new_papers],
+    }
+
+
+def save_digest() -> dict[str, Any]:
+    """
+    Agent-facing tool.
+
+    Write a Markdown digest for all papers collected in the current run.
+    """
+    papers = get_papers()
+    if not papers:
+        return {
+            "skipped": True,
+            "reason": "No new papers in this run. Nothing to save.",
+        }
+
+    cfg = _config()
+    today = date.today().isoformat()
+    digest_dir = Path(cfg["digest_dir"])
+    digest_dir.mkdir(parents=True, exist_ok=True)
+    out_path = digest_dir / f"{today}.md"
+
+    lines: list[str] = []
+    lines.append(f"# arXiv Digest — {today}")
+    lines.append("")
+    lines.append(f"{len(papers)} new papers.")
+    lines.append("")
+
+    for p in papers:
+        lines.append(f"## {p['title']}")
+        lines.append("")
+        lines.append(f"- URL: {p['url']}")
+        lines.append(f"- Published: {p['published']}")
+        lines.append("")
+        lines.append(p["summary"])
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+
+    return {"path": str(out_path), "count": len(papers)}
