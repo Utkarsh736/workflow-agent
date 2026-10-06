@@ -60,8 +60,6 @@ def main():
             )
             new_papers.append(paper)
 
-            print(result["summary"])
-            print()
 
     print("-" * 60)
     print(f"New papers summarized: {len(new_papers)}")

@@ -107,7 +107,7 @@ def search_arxiv(topic: str, max_results: int = 5) -> list[dict[str, Any]]:
 
 # --- Tool 2: summarize_paper ---
 
-from agent.llm import chat
+from agent.llm import chat, chat_stream
 from agent.prompts import SUMMARIZE_SYSTEM, summarize_user
 
 
@@ -127,7 +127,7 @@ def summarize_paper(
     - input_tokens, output_tokens, total_tokens
     - model
     """
-    result = chat(
+    result = chat_stream(
         system=SUMMARIZE_SYSTEM,
         user=summarize_user(title, abstract),
         model=model,

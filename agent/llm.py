@@ -210,3 +210,93 @@ def chat_with_tools(
         text=(msg.content or "").strip(),
         tool_calls=tool_calls,
     )
+
+
+def chat_stream(
+    system: str,
+    user: str,
+    model: str = "qwen/qwen3.8-27b",
+    temperature: float = 0.2,
+    max_tokens: int = 300,
+    max_retries: int = 3,
+    reasoning_effort: str | None = None,
+) -> LLMResult:
+    """
+    Streaming variant of chat.
+
+    Prints tokens to stdout as they arrive.
+    Returns the full LLMResult when done.
+
+    On any failure before the first token, falls back to chat().
+
+    Token usage comes from chunk.x_groq.usage on the final chunk.
+    Groq does not support stream_options.
+    """
+    client = _get_client()
+
+    kwargs: dict = dict(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stream=True,
+    )
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
+
+    try:
+        stream = client.chat.completions.create(**kwargs)
+    except Exception as e:
+        print(f"[stream] failed to start ({e}). Falling back to non-stream.")
+        return chat(
+            system=system,
+            user=user,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            max_retries=max_retries,
+            reasoning_effort=reasoning_effort,
+        )
+
+    text_parts: list[str] = []
+    usage = None
+
+    for chunk in stream:
+        # The final chunk has finish_reason set and carries usage.
+        choices = getattr(chunk, "choices", None) or []
+
+        if choices:
+            finish_reason = getattr(choices[0], "finish_reason", None)
+            if finish_reason is not None:
+                x_groq = getattr(chunk, "x_groq", None)
+                if x_groq is not None:
+                    usage = getattr(x_groq, "usage", None)
+
+            delta = getattr(choices[0], "delta", None)
+            piece = getattr(delta, "content", None) if delta else None
+            if piece:
+                print(piece, end="", flush=True)
+                text_parts.append(piece)
+
+        # Some chunks have empty choices but carry usage (rare).
+        if not choices and getattr(chunk, "x_groq", None):
+            usage = getattr(chunk.x_groq, "usage", None)
+
+    print()  # newline after streaming finishes
+
+    full_text = "".join(text_parts).strip()
+
+    input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+    output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+    total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+    return LLMResult(
+        text=full_text,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        model=model,
+    )
